@@ -34,10 +34,11 @@ print_usage() {
         echo "		-c	(optional) critical threshold"
 	echo ""
         echo "SupportedCommands:"
-        echo "			channels	(check number of current channels in-use)"
-        echo "			calls		(check number of current calls)"
-        echo "			sippeers	(check number of current calls)"
-        echo "			iaxpeers	(check number of current calls)"
+        echo "			channels		(check number of current channels in-use)"
+        echo "			calls			(check number of current calls)"
+        echo "			sippeers		(check number of current calls)"
+        echo "			iaxpeers		(check number of current calls)"
+        echo "			pjsipregistrations	(check state of pjsip registrations)"
 	echo ""
         echo "Usage: $PROGNAME --help"
         echo "Usage: $PROGNAME --version"
@@ -252,6 +253,27 @@ OFFLINE=`echo $SIPpeers | sed 's/.*online, \(.*\) offline.*Unmonitored.*/\1/'`
                 exitstatus=$STATE_CRITICAL
                 MSG="CRITICAL: ${ONLINE} online, ${OFFLINE} offline SIP peers|online=${ONLINE} offline=${OFFLINE}"
         fi
+
+elif [ "${CHECK}" = "pjsipregistrations" ]; then
+
+	PJSIPregs=`/bin/echo -e "Action: login\r\nUsername: ${AMIUSER}\r\nSecret: ${AMIPASS}\r\nEvents: off\r\n\r\nAction: Command\r\ncommand: pjsip show registrations\r\n\r\nAction: Logoff\r\n\r\n" | ${NC} ${REMOTEHOST} ${AMIPORT} | awk '/^Output:  [^<]/ {print $2" "$4}'`
+	REGISTERED=`echo "$PJSIPregs" | awk '$2=="Registered" {print $1}'`
+	UNREGISTERED=`echo "$PJSIPregs" | awk '$2=="Unregistered" {print $1}'`
+	REJECTED=`echo "$PJSIPregs" | awk '$2=="Rejected" {print $1}'`
+
+	if [ "$REJECTED" != "" ]; then
+                exitstatus=$STATE_CRITICAL
+                MSG="CRITICAL: $REJECTED rejected"
+	elif [ "$UNREGISTERED" != "" ]; then
+                exitstatus=$STATE_WARNING
+                MSG="WARNING: $UNREGISTERED unregistered"
+	elif [ "$REGISTERED" != "" ]; then
+                exitstatus=$STATE_OK
+                MSG="OK: $REGISTERED registered"
+	else
+                exitstatus=$STATUS_UNKNOWN
+                MSG="UNKNOWN: No registrations"
+	fi
 
 else
 	echo="CRITICAL: Unknown command"
